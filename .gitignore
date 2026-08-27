@@ -1,0 +1,5 @@
+.*.swp
+.*.swo
+.stack-work
+._*
+.DS_Store
