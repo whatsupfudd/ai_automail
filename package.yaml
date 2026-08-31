@@ -41,12 +41,14 @@ dependencies:
   - unix
   # For Cont(T):
   - mtl
+  - transformers
   # For SQL:
   - postgresql-binary
   - hasql
   - hasql-th
   - hasql-pool
   - hasql-transaction
+  - profunctors
   # For Cors:
   - case-insensitive
   # For HTTP:
@@ -64,6 +66,11 @@ dependencies:
   - servant-multipart
   # Concurrency:
   - stm
+  - async
+  # Crypto:
+  - crypton
+  - memory
+  - base64-bytestring
 
 
 default-extensions:

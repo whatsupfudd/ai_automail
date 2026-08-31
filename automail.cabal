@@ -29,11 +29,29 @@ library
       AutoMail.Action.Types
       AutoMail.Analysis.Driver
       AutoMail.Analysis.Types
+      AutoMail.App.Account.Runtime
+      AutoMail.App.Account.Supervisor
+      AutoMail.App.Account.Types
       AutoMail.App.Config
       AutoMail.App.Context
       AutoMail.App.Error
+      AutoMail.App.Runtime
+      AutoMail.App.Supervisor
       AutoMail.Blob.Types
+      AutoMail.Credential.Crypto
+      AutoMail.Credential.Store
+      AutoMail.Credential.Types
+      AutoMail.DB.Account
+      AutoMail.DB.Audit
       AutoMail.DB.Core
+      AutoMail.DB.Credential
+      AutoMail.DB.Migrate
+      AutoMail.DB.Principal
+      AutoMail.DB.ProviderEvent
+      AutoMail.DB.Schema
+      AutoMail.DB.Space
+      AutoMail.DB.Sync
+      AutoMail.DB.Tenant
       AutoMail.Job.Capability
       AutoMail.Job.Types
       AutoMail.Knowledge.Types
@@ -49,6 +67,8 @@ library
       AutoMail.Workflow.Types
       Commands
       Commands.Help
+      Commands.Migrate
+      Commands.Server
       Commands.Version
       DB.Connect
       DB.Opers
@@ -69,10 +89,13 @@ library
   ghc-options: -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       aeson
+    , async
     , base >=4.7 && <5
+    , base64-bytestring
     , bytestring
     , case-insensitive
     , containers
+    , crypton
     , directory
     , filepath
     , gitrev
@@ -82,9 +105,11 @@ library
     , hasql-th
     , hasql-transaction
     , http-types
+    , memory
     , mtl
     , optparse-applicative
     , postgresql-binary
+    , profunctors
     , scientific
     , servant
     , servant-auth
@@ -95,6 +120,7 @@ library
     , stm
     , text
     , time
+    , transformers
     , unix
     , vector
     , wai
@@ -117,11 +143,14 @@ executable automail
   ghc-options: -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
+    , async
     , automail
     , base >=4.7 && <5
+    , base64-bytestring
     , bytestring
     , case-insensitive
     , containers
+    , crypton
     , directory
     , filepath
     , gitrev
@@ -131,9 +160,11 @@ executable automail
     , hasql-th
     , hasql-transaction
     , http-types
+    , memory
     , mtl
     , optparse-applicative
     , postgresql-binary
+    , profunctors
     , scientific
     , servant
     , servant-auth
@@ -144,6 +175,7 @@ executable automail
     , stm
     , text
     , time
+    , transformers
     , unix
     , vector
     , wai
@@ -167,11 +199,14 @@ test-suite automail-test
   ghc-options: -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
+    , async
     , automail
     , base >=4.7 && <5
+    , base64-bytestring
     , bytestring
     , case-insensitive
     , containers
+    , crypton
     , directory
     , filepath
     , gitrev
@@ -181,9 +216,11 @@ test-suite automail-test
     , hasql-th
     , hasql-transaction
     , http-types
+    , memory
     , mtl
     , optparse-applicative
     , postgresql-binary
+    , profunctors
     , scientific
     , servant
     , servant-auth
@@ -194,6 +231,7 @@ test-suite automail-test
     , stm
     , text
     , time
+    , transformers
     , unix
     , vector
     , wai

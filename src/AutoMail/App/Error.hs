@@ -81,9 +81,13 @@ data ErrorAct = ErrorAct Text
   deriving stock (Eq, Show, Generic)
 
 
+data ErrorCred = ErrorCred Text
+  deriving stock (Eq, Show, Generic)
+
 data ErrorApp =
     ConfigEA ErrorConfig
   | DatabaseEA ErrorDb
+  | CredentialEA ErrorCred
   | ProviderEA ErrorPrv
   | MailEA ErrorMail
   | BlobEA ErrorBlob
