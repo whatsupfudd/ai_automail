@@ -24,7 +24,7 @@ import qualified Hasql.Session as HS
 import Hasql.Statement (Statement)
 import qualified Hasql.TH as HTH
 
-import AutoMail.App.Error
+import AutoMail.App.Error (ErrorDb, mkErrorDb)
 import AutoMail.DB.Core
 
 
@@ -109,7 +109,7 @@ versionFromInt32DB value =
 
 missingSchemaDB :: VersionSchemaDB -> ErrorDb
 missingSchemaDB expected =
-  ErrorDb $
+  mkErrorDb $
     "AutoMail database schema is not initialized; expected schema version "
       <> renderVersionSchemaDB expected
       <> ". Run `automail migrate` before starting `automail server`."
@@ -120,7 +120,7 @@ oldSchemaDB ::
   -> VersionSchemaDB
   -> ErrorDb
 oldSchemaDB current expected =
-  ErrorDb $
+  mkErrorDb $
     "AutoMail database schema is too old; current version is "
       <> renderVersionSchemaDB current
       <> ", expected version is "
@@ -133,7 +133,7 @@ newSchemaDB ::
   -> VersionSchemaDB
   -> ErrorDb
 newSchemaDB current expected =
-  ErrorDb $
+  mkErrorDb $
     "AutoMail database schema is newer than this binary; current version is "
       <> renderVersionSchemaDB current
       <> ", expected version is "

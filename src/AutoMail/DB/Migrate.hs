@@ -48,7 +48,7 @@ import Hasql.Session (Session)
 import Hasql.Statement (Statement)
 import qualified Hasql.TH as HTH
 
-import AutoMail.App.Error (ErrorDb(..))
+import AutoMail.App.Error (ErrorDb, mkErrorDb)
 import AutoMail.DB.Schema (VersionSchemaDB(..))
 import AutoMail.Model.Common (
     HashSha256
@@ -56,6 +56,7 @@ import AutoMail.Model.Common (
     , mkHashSha256
     , renderHashSha256
   )
+import DB.Connect (PgDbConfig)
 
 
 data MigrationDB = MigrationDB {
@@ -140,7 +141,7 @@ validateMigrationsDB migrations applied =
 
     errors ->
       Left $
-        ErrorDb $
+        mkErrorDb $
           renderErrorsMigrateDB
             "Invalid migration set"
             errors
@@ -178,12 +179,9 @@ applyMigrationDB migration = do
   Hs.statement migration insertMigrationStatementDB
 
 
-applyMigrationsDB ::
-  ByteString
-  -> Vector MigrationDB
-  -> IO (Either ErrorDb ())
+applyMigrationsDB :: PgDbConfig -> Vector MigrationDB -> IO (Either ErrorDb ())
 applyMigrationsDB connection migrations = do
-  pure . Left $ ErrorDb "@[applyMigrationsDB] Note: implemented"
+  pure . Left $ mkErrorDb "@[applyMigrationsDB] Note: implemented"
   {-
   acquired <-
     Ex.try (Hc.acquire []) connection
@@ -204,7 +202,7 @@ applyMigrationsDB connection migrations = do
     Right (Left errorConnection) ->
       pure $
         Left $
-          ErrorDb $
+          mkErrorDb $
             "PostgreSQL connection failed: "
               <> Tx.pack (show errorConnection)
 
@@ -214,10 +212,7 @@ applyMigrationsDB connection migrations = do
         (Hc.release dbConnection)
   -}
 
-applyMigrationsConnectionDB ::
-  Connection
-  -> Vector MigrationDB
-  -> IO (Either ErrorDb ())
+applyMigrationsConnectionDB :: Connection -> Vector MigrationDB -> IO (Either ErrorDb ())
 applyMigrationsConnectionDB connection migrations = do
   fetched <-
     runMigrationSessionDB
@@ -393,7 +388,7 @@ makeMigrationFileDB file content = do
   if blankByteStringDB content
     then
       Left $
-        ErrorDb $
+        mkErrorDb $
           "Migration file is empty: "
             <> Tx.pack file
 
@@ -421,7 +416,7 @@ parseMigrationFileNameDB file =
   case readMaybe digits of
     Nothing ->
       Left $
-        ErrorDb $
+        mkErrorDb $
           "Migration file name must start with a positive "
             <> "integer version: "
             <> Tx.pack file
@@ -429,7 +424,7 @@ parseMigrationFileNameDB file =
     Just version
       | version <= 0 ->
           Left $
-            ErrorDb $
+            mkErrorDb $
               "Migration version must be positive in file: "
                 <> Tx.pack file
 
@@ -460,7 +455,7 @@ parseMigrationNameDB file base rest =
           if null name || all isSpace name
             then
               Left $
-                ErrorDb $
+                mkErrorDb $
                   "Migration file name must contain a non-empty "
                     <> "name after the version: "
                     <> Tx.pack file
@@ -470,7 +465,7 @@ parseMigrationNameDB file base rest =
 
       | otherwise ->
           Left $
-            ErrorDb $
+            mkErrorDb $
               "Migration version and name must be separated "
                 <> "by '_', '-' or '.': "
                 <> Tx.pack file
@@ -790,7 +785,7 @@ renderErrorsMigrateDB heading errors =
 queryErrorMigrateDB ::
   Show err => err -> ErrorDb
 queryErrorMigrateDB err =
-  ErrorDb $
+  mkErrorDb $
     "PostgreSQL migration query failed: "
       <> Tx.pack (show err)
 
@@ -800,7 +795,7 @@ exceptionErrorMigrateDB ::
   -> Ex.SomeException
   -> ErrorDb
 exceptionErrorMigrateDB context exception =
-  ErrorDb $
+  mkErrorDb $
     "Exception while "
       <> context
       <> ": "

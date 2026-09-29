@@ -66,6 +66,7 @@ library
       AutoMail.Workflow.Driver
       AutoMail.Workflow.Types
       Commands
+      Commands.Config
       Commands.Help
       Commands.Migrate
       Commands.Server

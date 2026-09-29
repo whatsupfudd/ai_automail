@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 
-module Commands.Migrate (OptsMigrate(..), runMigrate) where
+module Commands.Migrate (migrateCmd) where
 
 import Control.Exception (finally)
 import Control.Monad.Except (ExceptT(..), runExceptT, throwError)
@@ -16,20 +16,15 @@ import System.Exit (exitFailure)
 import System.IO (stderr)
 
 import AutoMail.App.Config
-import AutoMail.App.Error
+import AutoMail.App.Error (ErrorConfig, ErrorDb, mkErrorDb)
 import AutoMail.DB.Core
 import AutoMail.DB.Migrate
 import AutoMail.DB.Schema
 import AutoMail.Model.Common
 
-
-data OptsMigrate = OptsMigrate {
-    configPathOM :: Maybe FilePath
-    , migrationsPathOM :: FilePath
-    , dryRunOM :: Bool
-  }
-  deriving stock (Eq, Show, Generic)
-
+import Options.Cli (MigrateOpts (..))
+import qualified Options.Runtime as Rt
+import Commands.Config (convertConfig)
 
 data ErrorMigrate =
     ConfigEM ErrorConfig
@@ -37,9 +32,9 @@ data ErrorMigrate =
   deriving stock (Eq, Show, Generic)
 
 
-runMigrate :: OptsMigrate -> IO ()
-runMigrate opts = do
-  result <- runExceptT $ executeMigrate opts
+migrateCmd :: MigrateOpts -> Rt.RunOptions -> IO ()
+migrateCmd opts rtOptions = do
+  result <- runExceptT $ executeMigrate opts rtOptions
   case result of
     Right () -> pure ()
     Left err -> do
@@ -47,9 +42,11 @@ runMigrate opts = do
       exitFailure
 
 
-executeMigrate :: OptsMigrate -> ExceptT ErrorMigrate IO ()
-executeMigrate opts = do
-  config <- loadConfigMigrate opts
+executeMigrate :: MigrateOpts -> Rt.RunOptions -> ExceptT ErrorMigrate IO ()
+executeMigrate opts rtOpts =
+  let
+    config = convertConfig rtOpts
+  in do
   migrations <- liftEitherIO DatabaseEM $ loadMigrationsDB opts.migrationsPathOM
   applied <- fetchAppliedMigrate config
   liftEitherPure DatabaseEM $ validateMigrationsDB migrations applied
@@ -62,11 +59,11 @@ executeMigrate opts = do
     (True, False) -> liftIO $ putTextLn "Dry run complete; no migrations were applied."
     (False, False) -> do
       liftIO $ putTextLn $ "Applying " <> renderCountMigrate (V.length pending) "migration" <> "."
-      liftEitherIO DatabaseEM $ applyMigrationsDB config.databaseCA.connectionTenantCD pending
+      liftEitherIO DatabaseEM $ applyMigrationsDB config.databaseCA.tenantConf pending
       liftIO $ putTextLn $ "Applied " <> renderCountMigrate (V.length pending) "migration" <> "."
 
-
-loadConfigMigrate :: OptsMigrate -> ExceptT ErrorMigrate IO ConfigApp
+{-
+loadConfigMigrate :: MigrateOpts -> ExceptT ErrorMigrate IO ConfigApp
 loadConfigMigrate opts = do
   case opts.configPathOM of
     Nothing -> pure ()
@@ -74,7 +71,7 @@ loadConfigMigrate opts = do
       "warning: configPathOM is currently informational for Commands.Migrate; loadConfigApp selects the effective configuration source: "
       <> Tx.pack path
   liftEitherIO ConfigEM $ loadConfigApp opts.configPathOM
-
+-}
 
 fetchAppliedMigrate :: ConfigApp -> ExceptT ErrorMigrate IO (V.Vector (VersionSchemaDB, HashSha256, UTCTime))
 fetchAppliedMigrate config =
@@ -87,7 +84,7 @@ withPoolMigrate config action = do
   ExceptT $ runExceptT (action pools) `finally` closePoolsDB pools
 
 
-printPlanMigrate :: OptsMigrate -> V.Vector MigrationDB -> V.Vector (VersionSchemaDB, HashSha256, UTCTime) -> V.Vector MigrationDB -> IO ()
+printPlanMigrate :: MigrateOpts -> V.Vector MigrationDB -> V.Vector (VersionSchemaDB, HashSha256, UTCTime) -> V.Vector MigrationDB -> IO ()
 printPlanMigrate opts migrations applied pending = do
   putTextLn "AutoMail migration plan"
   putTextLn $ "  migrations path: " <> Tx.pack opts.migrationsPathOM
@@ -119,8 +116,8 @@ renderCountMigrate count noun =
 renderErrorMigrate :: ErrorMigrate -> Text
 renderErrorMigrate err =
   case err of
-    ConfigEM (ErrorConfig message) -> "configuration error: " <> message
-    DatabaseEM (ErrorDb message) -> "database error: " <> message
+    ConfigEM errMsg -> "configuration error: " <> errMsg
+    DatabaseEM errMsg -> "database error: " <> errMsg
 
 
 liftEitherIO :: (err -> ErrorMigrate) -> IO (Either err a) -> ExceptT ErrorMigrate IO a

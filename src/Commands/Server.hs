@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 
-module Commands.Server (OptsServer(..), runServer) where
+module Commands.Server (serverCmd) where
 
 import Control.Exception (finally)
 import Control.Monad (void, when)
@@ -26,7 +26,7 @@ import AutoMail.App.Account.Runtime (emptyRegistryAccountPrv)
 import AutoMail.Action.Driver (emptyRegistryAct)
 import AutoMail.Action.Types
 import AutoMail.Analysis.Driver
-import AutoMail.App.Config  
+import qualified AutoMail.App.Config as Acf 
 import AutoMail.App.Context
 import AutoMail.App.Error
 import AutoMail.DB.Core
@@ -37,17 +37,16 @@ import AutoMail.Provider.Driver
 import AutoMail.Workflow.Driver
 import AutoMail.Workflow.Types
 
+import qualified Options.Runtime as Rt
+import DB.Connect (configPg)
+import Commands.Config (convertConfig)
 
-data OptsServer = OptsServer {
-    configPathOS :: Maybe FilePath
-  }
-  deriving stock (Eq, Show, Generic)
-
-
-runServer :: OptsServer -> IO ()
-runServer opts = do
+serverCmd :: Rt.RunOptions -> IO ()
+serverCmd rtOpts =
+  let
+    config = convertConfig rtOpts
+  in do
   result <- runExceptT $ do
-    config <- ExceptT $ pure . first ConfigEA =<< loadConfigServer opts
     pools <- ExceptT $ first DatabaseEA <$> openPoolsDB config.databaseCA
     liftIO $ finally (runOpenedServer config pools) (closePoolsDB pools)
   case result of
@@ -57,7 +56,7 @@ runServer opts = do
       exitFailure
 
 
-runOpenedServer :: ConfigApp -> PoolsDB -> IO ()
+runOpenedServer :: Acf.ConfigApp -> PoolsDB -> IO ()
 runOpenedServer config pool = do
   result <- runExceptT $ do
     ExceptT $ first DatabaseEA <$> verifySchemaServer pool
@@ -75,13 +74,15 @@ runOpenedServer config pool = do
       exitFailure
 
 
-loadConfigServer :: OptsServer -> IO (Either ErrorConfig ConfigApp)
+{- Deprecated:
+loadConfigServer :: ServerOpts -> IO (Either ErrorConfig ConfigApp)
 loadConfigServer opts = do
   when (opts.configPathOS /= Nothing) $ pure ()
   case opts.configPathOS of
     Nothing -> loadConfigApp (Just "config.yaml") >>= pure . (>>= validateConfigApp)
     Just path -> pure $ Left $ ErrorConfig $
       "configuration file loading is not wired into AutoMail.App.Config yet; refusing to ignore requested file " <> Tx.pack path
+-}
 
 
 verifySchemaServer :: PoolsDB -> IO (Either ErrorDb ())
@@ -89,7 +90,7 @@ verifySchemaServer pools =
   healthDB pools
 
 
-mkContextServer :: ConfigApp -> PoolsDB -> ShutdownApp -> AppContext
+mkContextServer :: Acf.ConfigApp -> PoolsDB -> ShutdownApp -> AppContext
 mkContextServer config pool shutdown =
   AppContext {
       configEA = config
@@ -138,7 +139,7 @@ unavailableQueueJob =
       , recoverQJ = \_ -> pure $ Right 0
     }
   where
-  unavailable = ErrorJob "job queue has not been registered in Commands.Server yet"
+  unavailable = mkErrorJob "job queue has not been registered in Commands.Server yet"
 
 
 noopDriverWf :: DriverWf IO
@@ -151,73 +152,24 @@ noopDriverWf =
 renderErrorApp :: ErrorApp -> Text
 renderErrorApp err =
   case err of
-    ConfigEA detail -> "configuration error: " <> renderErrorConfig detail
-    DatabaseEA detail -> "database error: " <> renderErrorDb detail
     ProviderEA detail -> "provider error: " <> renderErrorPrv detail
-    MailEA detail -> "mail error: " <> renderErrorMail detail
-    BlobEA detail -> "blob error: " <> renderErrorBlob detail
-    JobEA detail -> "job error: " <> renderErrorJob detail
-    AnalysisEA detail -> "analysis error: " <> renderErrorAn detail
-    KnowledgeEA detail -> "knowledge error: " <> renderErrorKn detail
-    WorkflowEA detail -> "workflow error: " <> renderErrorWf detail
-    PolicyEA detail -> "policy error: " <> renderErrorPol detail
-    ActionEA detail -> "action error: " <> renderErrorAct detail
+
+    ConfigEA detail -> "configuration error: " <> detail
+    DatabaseEA detail -> "database error: " <> detail
+    MailEA detail -> "mail error: " <> detail
+    BlobEA detail -> "blob error: " <> detail
+    JobEA detail -> "job error: " <> detail
+    AnalysisEA detail -> "analysis error: " <> detail
+    KnowledgeEA detail -> "knowledge error: " <> detail
+    WorkflowEA detail -> "workflow error: " <> detail
+    PolicyEA detail -> "policy error: " <> detail
+    ActionEA detail -> "action error: " <> detail
     InternalEA detail -> "internal error: " <> detail
-
-
-renderErrorConfig :: ErrorConfig -> Text
-renderErrorConfig (ErrorConfig message) =
-  message
-
-
-renderErrorDb :: ErrorDb -> Text
-renderErrorDb (ErrorDb message) =
-  message
 
 
 renderErrorPrv :: ErrorPrv -> Text
 renderErrorPrv err =
   err.messageEP <> " [" <> Tx.pack (show err.kindEP) <> ", retry=" <> Tx.pack (show err.retryEP) <> renderDetails err.detailsEP <> "]"
-
-
-renderErrorMail :: ErrorMail -> Text
-renderErrorMail (ErrorMail message) =
-  message
-
-
-renderErrorBlob :: ErrorBlob -> Text
-renderErrorBlob (ErrorBlob message) =
-  message
-
-
-renderErrorJob :: ErrorJob -> Text
-renderErrorJob (ErrorJob message) =
-  message
-
-
-renderErrorAn :: ErrorAn -> Text
-renderErrorAn (ErrorAn message) =
-  message
-
-
-renderErrorKn :: ErrorKn -> Text
-renderErrorKn (ErrorKn message) =
-  message
-
-
-renderErrorWf :: ErrorWf -> Text
-renderErrorWf (ErrorWf message) =
-  message
-
-
-renderErrorPol :: ErrorPol -> Text
-renderErrorPol (ErrorPol message) =
-  message
-
-
-renderErrorAct :: ErrorAct -> Text
-renderErrorAct (ErrorAct message) =
-  message
 
 
 renderDetails :: Maybe Value -> Text

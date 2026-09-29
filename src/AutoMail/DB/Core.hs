@@ -20,7 +20,7 @@ module AutoMail.DB.Core (
     , renderTenantUidDB
     , renderPrincipalUidDB
     , renderCorrelationKeyDB
-    , exceptionErrorDB, trySyncDB, handleExceptionDB
+    , exceptionErrorDB, handleExceptionDB
   ) where
 
 import Control.Exception (
@@ -30,9 +30,10 @@ import Control.Exception (
   )
 
 import Data.ByteString (ByteString)
+import Data.Int (Int64)
 import Data.Profunctor (dimap)
 import Data.Text (Text)
-import qualified Data.Text as Tx
+import qualified Data.Text as T
 import Data.Time (NominalDiffTime)
 
 import GHC.Generics (Generic)
@@ -52,7 +53,6 @@ import Hasql.Transaction.Sessions (
 import qualified Hasql.Transaction.Sessions as HTS
 
 import AutoMail.App.Config (ConfigDb(..))
-import AutoMail.App.Error (ErrorDb(..))
 import AutoMail.Model.Common (ContextTenant(..))
 import AutoMail.Model.Id (
     CorrelationKey(..)
@@ -60,9 +60,11 @@ import AutoMail.Model.Id (
     , TenantUid(..)
   )
 
+import DB.Connect (PgDbConfig, configPg)
+import AutoMail.App.Error (ErrorDb, mkErrorDb)
 
-newtype TenantPoolDB =
-  TenantPoolDB Pool.Pool
+
+newtype TenantPoolDB = TenantPoolDB Pool.Pool
 
 
 newtype ControlPoolDB =
@@ -93,14 +95,14 @@ type ContextParamsSqlDB =
 
 openPoolsDB :: ConfigDb -> IO (Either ErrorDb PoolsDB)
 openPoolsDB config = do
-  tenantResult <- openTenantPoolDB config
+  tenantResult <- openTenantPoolDB config.tenantConf
 
   case tenantResult of
     Left err ->
       pure $ Left err
 
     Right tenantPool -> do
-      controlResult <- openControlPoolDB config
+      controlResult <- openControlPoolDB config.controlConf
 
       case controlResult of
         Left err -> do
@@ -116,33 +118,20 @@ openPoolsDB config = do
                 }
 
 
-closePoolsDB ::
-  PoolsDB -> IO ()
+closePoolsDB :: PoolsDB -> IO ()
 closePoolsDB pools = do
   closeControlPoolDB pools.controlPD
   closeTenantPoolDB pools.tenantPD
 
 
-openTenantPoolDB ::
-  ConfigDb -> IO (Either ErrorDb TenantPoolDB)
+openTenantPoolDB :: PgDbConfig -> IO (Either ErrorDb TenantPoolDB)
 openTenantPoolDB config =
-  fmap TenantPoolDB
-    <$> openRawPoolDB
-      "tenant"
-      config.poolSizeTenantCD
-      config.poolAcquireTimeoutCD
-      config.connectionTenantCD
+  fmap TenantPoolDB <$> openRawPoolDB "tenant" config
 
 
-openControlPoolDB ::
-  ConfigDb -> IO (Either ErrorDb ControlPoolDB)
+openControlPoolDB :: PgDbConfig -> IO (Either ErrorDb ControlPoolDB)
 openControlPoolDB config =
-  fmap ControlPoolDB
-    <$> openRawPoolDB
-      "control"
-      config.poolSizeControlCD
-      config.poolAcquireTimeoutCD
-      config.connectionControlCD
+  fmap ControlPoolDB <$> openRawPoolDB "control" config
 
 
 closeTenantPoolDB :: TenantPoolDB -> IO ()
@@ -330,16 +319,12 @@ settingsContextToParamsDB settings =
   )
 
 
-renderTenantUidDB ::
-  TenantUid -> Text
-renderTenantUidDB (TenantUid uid) =
-  Tx.pack $ show uid
+renderTenantUidDB :: TenantUid -> Text
+renderTenantUidDB (TenantUid uid) = T.pack $ show uid
 
 
-renderPrincipalUidDB ::
-  PrincipalUid -> Text
-renderPrincipalUidDB (PrincipalUid uid) =
-  Tx.pack $ show uid
+renderPrincipalUidDB :: PrincipalUid -> Text
+renderPrincipalUidDB (PrincipalUid uid) = T.pack $ show uid
 
 
 renderCorrelationKeyDB ::
@@ -348,119 +333,41 @@ renderCorrelationKeyDB (CorrelationKey key) =
   key
 
 
-exceptionErrorDB ::
-  Text
-  -> SomeException
-  -> ErrorDb
-exceptionErrorDB context exception =
-  ErrorDb $
-    context
-      <> ": "
-      <> Tx.pack (displayException exception)
+exceptionErrorDB :: Text -> SomeException -> ErrorDb
+exceptionErrorDB context exception = mkErrorDb $ context <> ": " <> T.pack (displayException exception)
 
 
-trySyncDB ::
-  IO a -> IO (Either SomeException a)
-trySyncDB =
-  try
+handleExceptionDB :: SomeException -> IO (Either SomeException a)
+handleExceptionDB exception = pure $ Left exception
 
 
-handleExceptionDB ::
-  SomeException
-  -> IO (Either SomeException a)
-handleExceptionDB exception =
-  pure $ Left exception
-
-
-openRawPoolDB ::
-  Text
-  -> Int
-  -> NominalDiffTime
-  -> ByteString
-  -> IO (Either ErrorDb Pool.Pool)
-openRawPoolDB label size timeout connection = do
-  acquired <-
-    trySyncDB $
-      Pool.acquire $
-        settingsPoolDB size timeout connection
-
+openRawPoolDB :: Text -> PgDbConfig -> IO (Either ErrorDb Pool.Pool)
+openRawPoolDB label dbConf = do
+  acquired <- try $ Pool.acquire $ configPg dbConf
   case acquired of
-    Left exception ->
-      pure $
-        Left $
-          exceptionErrorDB
-            ("open " <> label <> " database pool")
-            exception
-
+    Left exception -> pure $ Left $ exceptionErrorDB ("open " <> label <> " database pool") exception
     Right pool -> do
-      healthResult <-
-        runRawSessionDB
-          ("open " <> label <> " database health")
-          pool
-          (HS.statement () healthStatementDB)
-
+      healthResult <- runRawSessionDB ("open " <> label <> " database health") pool (HS.statement () healthStatementDB)
       case healthResult of
         Left err -> do
           Pool.release pool
           pure $ Left err
-
-        Right () ->
-          pure $ Right pool
+        Right () -> pure $ Right pool
 
 
-settingsPoolDB ::
-  Int
-  -> NominalDiffTime
-  -> ByteString
-  -> Hpc.Config
-settingsPoolDB size timeout _connection =
-  Hpc.settings
-    [ Hpc.size size
-    , Hpc.acquisitionTimeout $
-        realToFrac timeout
-    ]
-
-
-runRawSessionDB ::
-  Text
-  -> Pool.Pool
-  -> Session a
-  -> IO (Either ErrorDb a)
+runRawSessionDB :: Text -> Pool.Pool -> Session a -> IO (Either ErrorDb a)
 runRawSessionDB context pool session = do
-  result <-
-    trySyncDB $
-      Pool.use pool session
-
+  result <- try $ Pool.use pool session
   case result of
-    Left exception ->
-      pure $
-        Left $
-          exceptionErrorDB context exception
-
-    Right (Left usageError) ->
-      pure $
-        Left $
-          ErrorDb $
-            context
-              <> ": "
-              <> Tx.pack (show usageError)
-
-    Right (Right value) ->
-      pure $ Right value
+    Left exception -> pure . Left $ exceptionErrorDB context exception
+    Right (Left usageError) -> pure . Left . mkErrorDb $ context <> ": " <> T.pack (show usageError)
+    Right (Right value) -> pure $ Right value
 
 
-settingsContextDB ::
-  ContextTenant -> SettingsContextDB
+settingsContextDB :: ContextTenant -> SettingsContextDB
 settingsContextDB context =
   SettingsContextDB {
-      tenantSCDB =
-        renderTenantUidDB context.tenantUidCT
-      , principalSCDB =
-          maybe
-            ""
-            renderPrincipalUidDB
-            context.principalUidCT
-      , correlationSCDB =
-          renderCorrelationKeyDB
-            context.correlationKeyCT
+      tenantSCDB = renderTenantUidDB context.tenantUidCT
+      , principalSCDB = maybe "" renderPrincipalUidDB context.principalUidCT
+      , correlationSCDB = renderCorrelationKeyDB context.correlationKeyCT
     }

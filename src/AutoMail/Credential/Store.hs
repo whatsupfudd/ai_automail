@@ -17,7 +17,7 @@ import qualified Data.Aeson.KeyMap as KM
 import Hasql.Transaction.Sessions (IsolationLevel(ReadCommitted), Mode(Read, Write))
 import Hasql.Transaction (Transaction)
 
-import AutoMail.App.Error (ErrorCred(..), ErrorDb(..))
+import AutoMail.App.Error (ErrorCred, ErrorDb, mkErrorCred)
 import AutoMail.Credential.Crypto (CryptoCred(..))
 import AutoMail.Credential.Types (
     ContextCred(..), EncryptedCred(..), KindCred, RuntimeCred(..), SecretCred (..)
@@ -43,10 +43,10 @@ data StoreCred m = StoreCred {
 emptyStoreCred :: StoreCred IO
 emptyStoreCred =
   StoreCred {
-    loadSC = \_ _ -> pure $ Left $ ErrorCred "loadStoreCred not implemented"
-    , createSC = \_ _ _ _ -> pure $ Left $ ErrorCred "createStoreCred not implemented"
-    , rotateSC = \_ _ _ -> pure $ Left $ ErrorCred "rotateStoreCred not implemented"
-    , revokeSC = \_ _ -> pure $ Left $ ErrorCred "revokeStoreCred not implemented"
+    loadSC = \_ _ -> pure $ Left $ mkErrorCred "loadStoreCred not implemented"
+    , createSC = \_ _ _ _ -> pure $ Left $ mkErrorCred "createStoreCred not implemented"
+    , rotateSC = \_ _ _ -> pure $ Left $ mkErrorCred "rotateStoreCred not implemented"
+    , revokeSC = \_ _ -> pure $ Left $ mkErrorCred "revokeStoreCred not implemented"
   }
 
 mkStoreCred :: PoolDB -> CryptoCred IO -> Clock IO -> StoreCred IO
@@ -82,7 +82,7 @@ loadStoreCred pool crypto clock tenantUid credentialUid = do
                   , metadataRC = metadataRuntimeCredential credential
                 }
               -}
-              Left $ ErrorCred $ "loadStoreCred: implemented" :: Either ErrorCred RuntimeCred
+              Left $ mkErrorCred $ "loadStoreCred: implemented" :: Either ErrorCred RuntimeCred
 
 
 createStoreCred :: PoolDB -> CryptoCred IO -> TenantUid -> KindCred -> SecretCred -> Value -> IO (Either ErrorCred CredentialUid)
@@ -101,7 +101,7 @@ createStoreCred pool crypto tenantUid kindCred secret metadata = do
       pure $ fmap (\credential -> credential.uidCD) inserted
 
 
-rotateStoreCred :: PoolDB -> CryptoCred IO -> Clock IO -> TenantUid -> CredentialUid -> SecretCred -> IO (Either ErrorCred ())
+rotateStoreCred :: PoolDB -> CryptoCred IO -> Clock IO -> TenantUid -> CredentialUid -> SecretCred -> IO (Either  ErrorCred ())
 rotateStoreCred pool crypto clock tenantUid credentialUid secret = do
   now <- clock.nowC
   fetched <- fetchCredentialStore pool tenantUid credentialUid "rotate.fetch"
@@ -123,7 +123,7 @@ rotateStoreCred pool crypto clock tenantUid credentialUid secret = do
                 Right (Just _) -> Right ()
 
 
-revokeStoreCred :: PoolDB -> Clock IO -> TenantUid -> CredentialUid -> IO (Either ErrorCred ())
+revokeStoreCred :: PoolDB -> Clock IO -> TenantUid -> CredentialUid -> IO (Either  ErrorCred ())
 revokeStoreCred pool clock tenantUid credentialUid = do
   now <- clock.nowC
   revoked <- runCredWriteDB pool tenantUid "revoke" $ revokeCredentialDB credentialUid now
@@ -245,40 +245,40 @@ unpackMetadataCred metadata =
 validateTenantCredential :: TenantUid -> CredentialDB -> Either ErrorCred CredentialDB
 validateTenantCredential tenantUid credential
   | credential.tenantUidCD == tenantUid = Right credential
-  | otherwise = Left $ ErrorCred $
+  | otherwise = Left $ mkErrorCred $
       "credential " <> renderCredentialUid credential.uidCD
         <> " belongs to tenant " <> renderTenantUid credential.tenantUidCD
         <> ", not tenant " <> renderTenantUid tenantUid
 
 
-validateLoadCredential :: Tm.UTCTime -> CredentialDB -> Either ErrorCred ()
+validateLoadCredential :: Tm.UTCTime -> CredentialDB -> Either  ErrorCred ()
 validateLoadCredential bound credential =
   case credential.revokedAtCD of
-    Just revokedAt -> Left $ ErrorCred $
+    Just revokedAt -> Left $ mkErrorCred $
       "credential " <> renderCredentialUid credential.uidCD <> " was revoked at " <> Tx.pack (show revokedAt)
     Nothing -> case credential.expiresAtCD of
       Just expiresAt | expiresAt <= bound ->
-        Left $ ErrorCred $ "credential " <> renderCredentialUid credential.uidCD <> " expired at " <> Tx.pack (show expiresAt)
+        Left $ mkErrorCred $ "credential " <> renderCredentialUid credential.uidCD <> " expired at " <> Tx.pack (show expiresAt)
       _ -> Right ()
 
 
-validateRotateCredential :: CredentialDB -> Either ErrorCred ()
+validateRotateCredential :: CredentialDB -> Either  ErrorCred ()
 validateRotateCredential credential =
   case credential.revokedAtCD of
-    Just revokedAt -> Left $ ErrorCred $
+    Just revokedAt -> Left $ mkErrorCred $
       "credential " <> renderCredentialUid credential.uidCD <> " was revoked at " <> Tx.pack (show revokedAt)
 
     Nothing -> Right ()
 
 
-missingCredentialError :: CredentialUid -> ErrorCred
+missingCredentialError :: CredentialUid  -> ErrorCred
 missingCredentialError credentialUid =
-  ErrorCred $ "credential not found: " <> renderCredentialUid credentialUid
+  mkErrorCred $ "credential not found: " <> renderCredentialUid credentialUid
 
 
-databaseCredentialError :: Text -> ErrorDb -> ErrorCred
-databaseCredentialError operation (ErrorDb message) =
-  ErrorCred $ "credential " <> operation <> " database error: " <> message
+databaseCredentialError :: Text -> ErrorDb  -> ErrorCred
+databaseCredentialError operation errMsg =
+  mkErrorCred $ "credential " <> operation <> " database error: " <> errMsg
 
 
 renderTenantUid :: TenantUid -> Text

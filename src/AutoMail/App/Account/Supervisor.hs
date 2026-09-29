@@ -28,7 +28,7 @@ import AutoMail.App.Account.Types (
     EventAccount(..), GenerationAccount(..), HookAccount(..), RuntimeAccount(..), StatusAccountRun(..)
   )
 import AutoMail.App.Context (ShutdownApp(..))
-import AutoMail.App.Error (ErrorApp(..), ErrorDb(..), RetryError(..), retryErrorApp)
+import AutoMail.App.Error (ErrorApp(..), ErrorDb(..), RetryError(..), mkErrorDb, retryErrorApp)
 import AutoMail.DB.Account (AccountRefDB(..), listActiveAccountRefsDB)
 import AutoMail.DB.Core (ControlPoolDB, runControlReadDB)
 import AutoMail.Model.Id (AccountUid)
@@ -345,7 +345,7 @@ exceptionTextAccount context exception =
 
 exceptionErrorDB :: Text -> SomeException -> ErrorDb
 exceptionErrorDB context exception =
-  ErrorDb $ exceptionTextAccount context exception
+  mkErrorDb $ exceptionTextAccount context exception
 
 
 tryAny :: IO a -> IO (Either SomeException a)

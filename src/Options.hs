@@ -21,15 +21,19 @@ import qualified System.Directory as Sdir
 
 import qualified HttpSup.CorsPolicy as Hcrs
 
-import qualified Options.Cli as Cl (CliOptions (..), EnvOptions (..))
-import qualified Options.ConfFile as Fo (FileOptions (..), PgDbOpts (..), ServerOpts (..), CorsOpts (..), JwtOpts (..))
-import qualified Options.Runtime as Rt (RunOptions (..), defaultRun, PgDbConfig (..), defaultPgDbConf)
-
+import qualified Options.Cli as Cl
+import qualified Options.ConfFile as Fo
+import qualified Options.Runtime as Rt -- (RunOptions (..), defaultRun, PgDbConfig (..), defaultPgDbConf)
+import qualified DB.Connect as DbC
 
 type ConfError = Either String ()
 type RunOptSt = State Rt.RunOptions ConfError
 type RunOptIOSt = StateT Rt.RunOptions IO ConfError
-type PgDbOptIOSt = StateT Rt.PgDbConfig (StateT Rt.RunOptions IO) ConfError
+type PgDbOptIOSt = StateT DbC.PgDbConfig (StateT Rt.RunOptions IO) ConfError
+type GoogleOptIOSt = StateT Rt.GoogleConf (StateT Rt.RunOptions IO) ConfError
+type RuntimeOptIOSt = StateT Rt.RuntimeConf (StateT Rt.RunOptions IO) ConfError
+type WorkersOptIOSt = StateT Rt.WorkersConf (StateT Rt.RunOptions IO) ConfError
+type CryptoOptIOSt = StateT Rt.CryptoConf (StateT Rt.RunOptions IO) ConfError
 
 
 mconf :: MonadState s m => Maybe t -> (t -> s -> s) -> m ()
@@ -69,16 +73,21 @@ mergeOptions cli file env = do
     for_ file.server parseServer
     for_ file.jwt parseJWT
     for_ file.cors parseCors
-    innerConf (\nVal s -> s { Rt.pgDbConf = nVal }) parsePgDb Rt.defaultPgDbConf file.db
+    innerConf (\nVal s -> s { Rt.tenantConf = nVal }) parsePgDb DbC.defaultPgDbConf file.tenantDb
+    innerConf (\nVal s -> s { Rt.controlConf = nVal }) parsePgDb DbC.defaultPgDbConf file.controlDb
+    innerConf (\nVal s -> s { Rt.googleConf = nVal }) parseGoogle Rt.defaultGoogleConf file.google 
+    innerConf (\nVal s -> s { Rt.runtimeConf = nVal }) parseRuntime Rt.defaultRuntimeConf file.runtime 
+    innerConf (\nVal s -> s { Rt.workersConf = nVal }) parseWorkers Rt.defaultWorkersConf file.workers 
+    innerConf (\nVal s -> s { Rt.cryptoConf = nVal }) parseCrypto Rt.defaultCryptoConf file.crypto 
     pure $ Right ()
 
   parsePgDb :: Fo.PgDbOpts -> PgDbOptIOSt
   parsePgDb dbO = do
-    mconf dbO.host $ \nVal s -> s { Rt.host = T.encodeUtf8 . T.pack $ nVal }
-    mconf dbO.port $ \nVal s -> s { Rt.port = fromIntegral nVal }
-    mconf dbO.user $ \nVal s -> s { Rt.user = T.encodeUtf8 . T.pack $ nVal }
-    mconf dbO.passwd $ \nVal s -> s { Rt.passwd = T.encodeUtf8 . T.pack $ nVal }
-    mconf dbO.dbase $ \nVal s -> s { Rt.dbase = T.encodeUtf8 . T.pack $ nVal }
+    mconf dbO.host $ \nVal s -> s { DbC.host = T.encodeUtf8 . T.pack $ nVal }
+    mconf dbO.port $ \nVal s -> s { DbC.port = fromIntegral nVal }
+    mconf dbO.user $ \nVal s -> s { DbC.user = T.encodeUtf8 . T.pack $ nVal }
+    mconf dbO.passwd $ \nVal s -> s { DbC.passwd = T.encodeUtf8 . T.pack $ nVal }
+    mconf dbO.dbase $ \nVal s -> s { DbC.dbase = T.encodeUtf8 . T.pack $ nVal }
     pure $ Right ()
 
 
@@ -110,12 +119,42 @@ mergeOptions cli file env = do
   parseCors :: Fo.CorsOpts -> RunOptIOSt
   parseCors co = do
     case co.oEnabled of
-      Just False ->
-        modify $ \s -> s { Rt.corsPolicy = Nothing }
-      _ ->
-        mconf co.allowed $ \nVal s -> s { Rt.corsPolicy = Just $ Hcrs.defaultCorsPolicy { Hcrs.allowedOrigins = map T.pack nVal } }
+      Just False -> modify $ \s -> s { Rt.corsPolicy = Nothing }
+      _ -> mconf co.allowed $ \nVal s ->
+          s { Rt.corsPolicy = Just $ Hcrs.defaultCorsPolicy { Hcrs.allowedOrigins = map T.pack nVal } }
     pure $ Right ()
 
+
+  parseGoogle :: Fo.GoogleOpts -> GoogleOptIOSt
+  parseGoogle go = do
+    mconf go.clientId $ \nVal s -> s { Rt.clientId = nVal }
+    mconf go.clientSecretRef $ \nVal s -> s { Rt.clientSecretRef = nVal }
+    mconf go.redirectUri $ \nVal s -> s { Rt.redirectUri = nVal }
+    mconf go.pubsubProject $ \nVal s -> s { Rt.pubsubProject = Just nVal }
+    mconf go.pubsubTopic $ \nVal s -> s { Rt.pubsubTopic = Just nVal }
+    pure $ Right ()
+
+  parseRuntime :: Fo.RuntimeOpts -> RuntimeOptIOSt
+  parseRuntime ro = do
+    mconf ro.instanceId $ \nVal s -> s { Rt.instanceId = nVal }
+    mconf ro.shutdownSeconds $ \nVal s -> s { Rt.shutdownSeconds = nVal }
+    mconf ro.accountRefreshSeconds $ \nVal s -> s { Rt.accountRefreshSeconds = nVal }
+    mconf ro.maintenanceSeconds $ \nVal s -> s { Rt.maintenanceSeconds = nVal }
+    pure $ Right ()
+
+  parseWorkers :: Fo.WorkersOpts -> WorkersOptIOSt
+  parseWorkers wo = do
+    mconf wo.count $ \nVal s -> s { Rt.count = nVal }
+    mconf wo.leaseSeconds $ \nVal s -> s { Rt.leaseSeconds = nVal }
+    mconf wo.pollingMs $ \nVal s -> s { Rt.pollingMs = nVal }
+    mconf wo.retryMax $ \nVal s -> s { Rt.retryMax = nVal }
+    pure $ Right ()
+
+  parseCrypto :: Fo.CryptoOpts -> CryptoOptIOSt
+  parseCrypto co = do
+    mconf co.keySource $ \nVal s -> s { Rt.keySource = nVal }
+    mconf co.keyRef $ \nVal s -> s { Rt.keyRef = nVal }
+    pure $ Right ()
 
 -- | resolveEnvValue resolves an environment variable value.
 resolveEnvValue :: FilePath -> IO (Maybe FilePath)

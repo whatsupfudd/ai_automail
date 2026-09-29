@@ -30,7 +30,8 @@ runWithOptions cliOptions fileOptions = do
           case aJob of
             Opt.HelpCmd -> Cmd.helpCmd
             Opt.VersionCmd -> Cmd.versionCmd
-            -- HERE: add the other commands for this project.
+            Opt.ServerCmd -> Cmd.serverCmd
+            Opt.MigrateCmd opts -> Cmd.migrateCmd opts
       rtOptions <- Opt.mergeOptions cliOptions fileOptions envOptions
       result <- cmdExecutor rtOptions
       -- TODO: return a properly kind of conclusion.

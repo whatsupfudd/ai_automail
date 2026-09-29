@@ -25,17 +25,20 @@ data GlobalOptions = GlobalOptions {
 data Command =
   HelpCmd
   | VersionCmd
-  -- HERE: New command types:
-  -- Eg: | ImportCmd Text Text
+  | ServerCmd
+  | MigrateCmd MigrateOpts
+    -- HERE: New command types:
   deriving stock (Show)
 
-{- HERE: Additional structures for holding new command parameters:
-Eg:
-data ImportOpts = ImportOpts {
-    taxonomy :: Text
-    , path :: Text
+
+data MigrateOpts = MigrateOpts {
+    configPathOM :: Maybe FilePath
+    , migrationsPathOM :: FilePath
+    , dryRunOM :: Bool
   }
--}
+  deriving stock (Eq, Show)
+
+
 
 parseCliOptions :: IO (Either String CliOptions)
 parseCliOptions =
@@ -96,8 +99,8 @@ commandDefs =
     cmdArray = [
       ("help", pure HelpCmd, "Help about any command.")
       , ("version", pure VersionCmd, "Shows the version number of importer.")
-      -- HERE: additional commands:
-      -- Eg: ("import", importOpts, "Loads up a path into BeeBoD.")
+      , ("server", pure ServerCmd, "Starts the server.")
+      , ("migrate", MigrateCmd <$> migrateOpts, "Runs the migrations.")
       ]
     (headArray, tailArray) = case cmdArray of
       aHead : aTail -> (aHead, aTail)
@@ -108,10 +111,14 @@ commandDefs =
     cmdBuilder (label, cmdDef, desc) =
       command label (info cmdDef (progDesc desc))
 
-{- HERE: additional options parser:
-Eg:
-importOpts :: Parser Command
-importOpts =
-  ImportCmd <$> strArgument (metavar "TAXO" <> help "Taxonomy root where paths are inserted.")
-    <*> strArgument (metavar "PATH" <> help "Directory to import into Beebod.")
--}
+migrateOpts :: Parser MigrateOpts
+migrateOpts =
+  MigrateOpts <$> option auto (
+      long "config" <> short 'c' <> metavar "automailCONF" <> help "Global config file (default is ~/.automail/config.yaml)."
+    )
+    <*> option auto (
+      long "migrations" <> short 'm' <> metavar "MIGRATIONS" <> help "Path to the migrations directory."
+    )
+    <*> switch (
+      long "dry-run" <> short 'd' <> help "Dry run the migrations."
+    )

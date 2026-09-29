@@ -40,62 +40,33 @@ data ErrorPrv = ErrorPrv {
   }
   deriving stock (Eq, Show, Generic)
 
-
-data ErrorConfig = ErrorConfig Text
-  deriving stock (Eq, Show, Generic)
-
-
-data ErrorDb = ErrorDb Text
-  deriving stock (Eq, Show, Generic)
-
-
-data ErrorMail = ErrorMail Text
-  deriving stock (Eq, Show, Generic)
-
-
-data ErrorBlob = ErrorBlob Text
-  deriving stock (Eq, Show, Generic)
-
-
-data ErrorJob = ErrorJob Text
-  deriving stock (Eq, Show, Generic)
-
-
-data ErrorAn = ErrorAn Text
-  deriving stock (Eq, Show, Generic)
-
-
-data ErrorKn = ErrorKn Text
-  deriving stock (Eq, Show, Generic)
-
-
-data ErrorWf = ErrorWf Text
-  deriving stock (Eq, Show, Generic)
-
-
-data ErrorPol = ErrorPol Text
-  deriving stock (Eq, Show, Generic)
-
-
-data ErrorAct = ErrorAct Text
-  deriving stock (Eq, Show, Generic)
-
-
-data ErrorCred = ErrorCred Text
-  deriving stock (Eq, Show, Generic)
+-- Initial implementation of these types is just an alias.
+type ErrorAn = Text
+type ErrorAct = Text
+type ErrorConfig = Text
+type ErrorJob = Text
+mkErrorJob :: Text -> ErrorJob
+mkErrorJob = id
+type ErrorWf = Text
+type ErrorDb = Text
+mkErrorDb :: Text -> ErrorDb
+mkErrorDb = id
+type ErrorCred = Text
+mkErrorCred :: Text -> ErrorCred
+mkErrorCred = id
 
 data ErrorApp =
     ConfigEA ErrorConfig
   | DatabaseEA ErrorDb
-  | CredentialEA ErrorCred
+  | CredentialEA Text
   | ProviderEA ErrorPrv
-  | MailEA ErrorMail
-  | BlobEA ErrorBlob
+  | MailEA Text
+  | BlobEA Text
   | JobEA ErrorJob
   | AnalysisEA ErrorAn
-  | KnowledgeEA ErrorKn
+  | KnowledgeEA Text
   | WorkflowEA ErrorWf
-  | PolicyEA ErrorPol
+  | PolicyEA Text
   | ActionEA ErrorAct
   | InternalEA Text
   deriving stock (Eq, Show, Generic)

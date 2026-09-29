@@ -8,12 +8,13 @@
 module AutoMail.App.Config (
     ConfigApp(..), ConfigDb(..), ConfigHttp(..), ConfigWorkers(..), ConfigCrypto(..), ConfigGoogle(..), ConfigRuntime(..)
     , EnvironmentConfig, DecodeConfig(..)
-    , loadConfigApp, decodeConfigApp, decodeEnvironmentConfig, applyEnvConfigApp
-    , decodeDatabaseConfig, decodeHttpConfig, decodeWorkersConfig, decodeCryptoConfig, decodeGoogleConfig, decodeRuntimeConfig
+    {-, loadConfigApp, decodeConfigApp, decodeEnvironmentConfig, applyEnvConfigApp
+    , decodeHttpConfig, decodeWorkersConfig, decodeCryptoConfig, decodeGoogleConfig, decodeRuntimeConfig
     , instanceDefaultConfig, decodeRequiredText, decodeRequiredBytes, decodeOptionalText, decodeTextDefault, decodeIntDefault
     , decodeSecondsDefault, lookupTextConfig, validateConfigApp, validateDatabaseConfig, validateHttpConfig, validateWorkersConfig
     , validateCryptoConfig, validateGoogleConfig, validateRuntimeConfig, checkConfig, checkTextConfig, checkOptionalTextConfig
     , checkHttpUriConfig, checkOptionalHttpUriConfig, nonBlankBytes, quotedConfig, quotedTextConfig, renderErrorsConfig
+    -}
   ) where
 
 import Control.Applicative ((<|>))
@@ -36,6 +37,7 @@ import System.Environment (getEnvironment)
 import Text.Read (readMaybe)
 
 import AutoMail.App.Error
+import DB.Connect (PgDbConfig)
 
 
 data ConfigApp = ConfigApp {
@@ -68,21 +70,12 @@ data ConfigDb = ConfigDb {
   deriving stock (Eq, Generic)
 -}
 
+
 data ConfigDb = ConfigDb {
-    connectionTenantCD :: ByteString
-    , connectionControlCD :: ByteString
-    , poolSizeTenantCD :: Int
-    , poolSizeControlCD :: Int
-    , poolAcquireTimeoutCD :: NominalDiffTime
+    tenantConf :: PgDbConfig
+    , controlConf :: PgDbConfig
   }
-  deriving stock (Eq, Generic)
-
-instance Show ConfigDb where
-  show config = "ConfigDb {connectionCD = <redacted>, poolSizeTenantCD = "
-    <> show config.poolSizeTenantCD
-    <> ", poolSizeControlCD = " <> show config.poolSizeControlCD
-    <> ", poolAcquireTimeoutCD = " <> show config.poolAcquireTimeoutCD <> "}"
-
+  deriving stock (Eq, Generic, Show)
 
 data ConfigHttp = ConfigHttp {
     hostCH :: Text
@@ -154,6 +147,7 @@ instance Applicative DecodeConfig where
       (_, InvalidDC errors) -> InvalidDC errors
 
 
+{-
 loadConfigApp :: Maybe FilePath -> IO (Either ErrorConfig ConfigApp)
 loadConfigApp maybeConfigPath = do
   processEnv <- environmentProcessConfig
@@ -187,16 +181,6 @@ applyEnvConfigApp :: ConfigApp -> IO (Either ErrorConfig ConfigApp)
 applyEnvConfigApp config = do
   processEnv <- environmentProcessConfig
   pure $ decodeEnvironmentConfig $ Map.union processEnv $ environmentFromConfig config
-
-
-decodeDatabaseConfig :: EnvironmentConfig -> DecodeConfig ConfigDb
-decodeDatabaseConfig env =
-  ConfigDb
-    <$> decodeRequiredBytesAny env "database connection" ["AUTOMAIL_DB_CONNECTION", "AUTOMAIL_DATABASE_URL", "DATABASE_URL"]
-    <*> decodeRequiredBytesAny env "control database connection" ["AUTOMAIL_CONTROL_DB_CONNECTION", "AUTOMAIL_CONTROL_DATABASE_URL", "CONTROL_DATABASE_URL"]
-    <*> decodeIntDefaultAny env ["AUTOMAIL_DB_POOL_SIZE", "AUTOMAIL_DATABASE_POOL_SIZE"] 10
-    <*> decodeIntDefaultAny env ["AUTOMAIL_CONTROL_DB_POOL_SIZE", "AUTOMAIL_CONTROL_DATABASE_POOL_SIZE"] 10
-    <*> decodeSecondsDefaultAny env ["AUTOMAIL_DB_POOL_ACQUIRE_SECONDS", "AUTOMAIL_DB_POOL_ACQUIRE_TIMEOUT_SECONDS"] 5
 
 
 decodeHttpConfig :: EnvironmentConfig -> DecodeConfig ConfigHttp
@@ -635,3 +619,4 @@ bytesStringConfig =
 showSecondsConfig :: NominalDiffTime -> String
 showSecondsConfig seconds =
   show (realToFrac seconds :: Double)
+-}

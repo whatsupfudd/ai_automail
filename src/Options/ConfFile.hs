@@ -47,15 +47,50 @@ data CorsOpts = CorsOpts {
   }
   deriving stock (Show, Generic)
 
+
+data GoogleOpts = GoogleOpts {
+    clientId :: Maybe Text
+  , clientSecretRef :: Maybe Text
+  , redirectUri :: Maybe Text
+  , pubsubProject :: Maybe Text
+  , pubsubTopic :: Maybe Text
+  }
+  deriving stock (Show, Generic)
+
+data RuntimeOpts = RuntimeOpts {
+    instanceId :: Maybe Text
+  , shutdownSeconds :: Maybe Int
+  , accountRefreshSeconds :: Maybe Int
+  , maintenanceSeconds :: Maybe Int
+  }
+  deriving stock (Show, Generic)
+
+data WorkersOpts = WorkersOpts {
+    count :: Maybe Int
+  , leaseSeconds :: Maybe Int
+  , pollingMs :: Maybe Int
+  , retryMax :: Maybe Int
+  }
+  deriving stock (Show, Generic)
+
+data CryptoOpts = CryptoOpts {
+    keySource :: Maybe Text
+  , keyRef :: Maybe Text
+  }
+  deriving stock (Show, Generic)
+
+
 data FileOptions = FileOptions {
   debug :: Maybe Int
-  , primaryLocale :: Maybe String
-  , db :: Maybe PgDbOpts
+  , tenantDb :: Maybe PgDbOpts
+  , controlDb :: Maybe PgDbOpts
   , server :: Maybe ServerOpts
   , jwt :: Maybe JwtOpts
   , cors :: Maybe CorsOpts
-  -- HERE: add new parameters received from the config file:
-  -- Et: , rootDir :: Maybe String
+  , google :: Maybe GoogleOpts
+  , runtime :: Maybe RuntimeOpts
+  , workers :: Maybe WorkersOpts
+  , crypto :: Maybe CryptoOpts
  }
  deriving stock (Show, Generic)
 
@@ -79,6 +114,10 @@ instance Aes.FromJSON PgDbOpts
 instance Aes.FromJSON ServerOpts
 instance Aes.FromJSON JwtOpts
 instance Aes.FromJSON CorsOpts
+instance Aes.FromJSON GoogleOpts
+instance Aes.FromJSON RuntimeOpts
+instance Aes.FromJSON WorkersOpts
+instance Aes.FromJSON CryptoOpts
 
 parseFileOptions :: FilePath -> IO (Either String FileOptions)
 parseFileOptions filePath =
